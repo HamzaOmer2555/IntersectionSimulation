@@ -22,27 +22,103 @@ struct TrafficLight {
         lightSprite.setTexture(redTex);
     }
 
-    void updateState() {
-        float elapsed = stateClock.getElapsedTime().asSeconds();
-        if (state == "RED" && elapsed >= redDuration) {
-            state = "GREEN";
-            lightSprite.setTexture(greenTex);
-            stateClock.restart();
-        } else if (state == "GREEN" && elapsed >= greenDuration) {
-            state = "YELLOW";
-            lightSprite.setTexture(yellowTex);
-            stateClock.restart();
-        } else if (state == "YELLOW" && elapsed >= yellowDuration) {
-            state = "RED";
-            lightSprite.setTexture(redTex);
-            stateClock.restart();
-        }
-    }
+    
+
 
     bool canPass() const {
         return state == "GREEN";
     }
 };
+
+void updateTrafficLights(TrafficLight& northLight, TrafficLight& southLight, TrafficLight& eastLight, TrafficLight& westLight, sf::Clock& trafficCycleClock, float cycleDuration, float yellowDuration) {
+    float elapsed = trafficCycleClock.getElapsedTime().asSeconds();
+
+    if (elapsed >= cycleDuration) {
+        trafficCycleClock.restart(); // Restart the cycle timer
+    }
+
+    // Define the time points for the light changes
+    float greenPhaseDuration = (cycleDuration / 2) - yellowDuration;
+
+    if (elapsed < greenPhaseDuration) {
+        // North-South GREEN, East-West RED
+        if (northLight.state != "GREEN") {
+            northLight.state = "GREEN";
+            northLight.lightSprite.setTexture(northLight.greenTex);
+        }
+        if (southLight.state != "GREEN") {
+            southLight.state = "GREEN";
+            southLight.lightSprite.setTexture(southLight.greenTex);
+        }
+        if (eastLight.state != "RED") {
+            eastLight.state = "RED";
+            eastLight.lightSprite.setTexture(eastLight.redTex);
+        }
+        if (westLight.state != "RED") {
+            westLight.state = "RED";
+            westLight.lightSprite.setTexture(westLight.redTex);
+        }
+    } else if (elapsed < greenPhaseDuration + yellowDuration) {
+        // North-South YELLOW, East-West remains RED
+        if (northLight.state != "YELLOW") {
+            northLight.state = "YELLOW";
+            northLight.lightSprite.setTexture(northLight.yellowTex);
+        }
+        if (southLight.state != "YELLOW") {
+            southLight.state = "YELLOW";
+            southLight.lightSprite.setTexture(southLight.yellowTex);
+        }
+    } else if (elapsed < cycleDuration / 2) {
+        // North-South RED, East-West remains RED
+        if (northLight.state != "RED") {
+            northLight.state = "RED";
+            northLight.lightSprite.setTexture(northLight.redTex);
+        }
+        if (southLight.state != "RED") {
+            southLight.state = "RED";
+            southLight.lightSprite.setTexture(southLight.redTex);
+        }
+    } else if (elapsed < (cycleDuration / 2) + greenPhaseDuration) {
+        // East-West GREEN, North-South RED
+        if (eastLight.state != "GREEN") {
+            eastLight.state = "GREEN";
+            eastLight.lightSprite.setTexture(eastLight.greenTex);
+        }
+        if (westLight.state != "GREEN") {
+            westLight.state = "GREEN";
+            westLight.lightSprite.setTexture(westLight.greenTex);
+        }
+        if (northLight.state != "RED") {
+            northLight.state = "RED";
+            northLight.lightSprite.setTexture(northLight.redTex);
+        }
+        if (southLight.state != "RED") {
+            southLight.state = "RED";
+            southLight.lightSprite.setTexture(southLight.redTex);
+        }
+    } else if (elapsed < (cycleDuration / 2) + greenPhaseDuration + yellowDuration) {
+        // East-West YELLOW, North-South remains RED
+        if (eastLight.state != "YELLOW") {
+            eastLight.state = "YELLOW";
+            eastLight.lightSprite.setTexture(eastLight.yellowTex);
+        }
+        if (westLight.state != "YELLOW") {
+            westLight.state = "YELLOW";
+            westLight.lightSprite.setTexture(westLight.yellowTex);
+        }
+    } else {
+        // East-West RED, North-South remains RED
+        if (eastLight.state != "RED") {
+            eastLight.state = "RED";
+            eastLight.lightSprite.setTexture(eastLight.redTex);
+        }
+        if (westLight.state != "RED") {
+            westLight.state = "RED";
+            westLight.lightSprite.setTexture(westLight.redTex);
+        }
+    }
+}
+
 
 
 const sf::Vector2f NORTH_SPAWN_REGULAR_LANE1(522, 0);  // Starting from top-center
@@ -128,9 +204,6 @@ int main() {
     westLight.lightSprite.setScale(0.1f, 0.1f);
 
 
-
-
-
     // Clock for simulation timing for each direction
     sf::Clock northClock, southClock, eastClock, westClock, heavyCarClock;
 
@@ -151,11 +224,42 @@ int main() {
     trafficLight.setFillColor(sf::Color::Red);
     trafficLight.setPosition(380, 300);
 
+    sf::Clock trafficCycleClock;
+    float cycleDuration = 15.0f; // Total duration for one complete cycle (e.g., 10 seconds)
+
+    // Load font for timer
+    sf::Font font;
+    if (!font.loadFromFile("fonts/fonty_font.ttf")) { // Replace with the path to your font file
+        std::cerr << "Error: Could not load font!" << std::endl;
+        return -1;
+    }
+
+    // Timer text
+    sf::Text timerText;
+    timerText.setFont(font);
+    timerText.setCharacterSize(24);
+    timerText.setFillColor(sf::Color::White);
+    timerText.setPosition(5, 950); // Top-left corner
+
+    sf::Clock simulationClock;
+    const float simulationDuration = 300.0f; // 5 minutes in seconds
+
+
     while (window.isOpen()) {
         sf::Event event;
         while (window.pollEvent(event)) {
             if (event.type == sf::Event::Closed)
                 window.close();
+        }
+
+        // Calculate remaining time
+        float elapsedTime = simulationClock.getElapsedTime().asSeconds();
+        float remainingTime = simulationDuration - elapsedTime;
+
+        if (remainingTime <= 0.0f) {
+            std::cout << "Simulation complete!" << std::endl;
+            window.close(); // Exit the simulation after 5 minutes
+            break;
         }
 
         // // Spawn emergency vehicles
@@ -290,10 +394,8 @@ int main() {
         //     heavyCarClock.restart();
         // }
 
-        northLight.updateState();
-        southLight.updateState();
-        eastLight.updateState();
-        westLight.updateState();
+        updateTrafficLights(northLight, southLight, eastLight, westLight, trafficCycleClock, cycleDuration, 3);
+
 
 
        // Move vehicles
@@ -462,10 +564,16 @@ int main() {
         std::flush(std::cout); // Ensure it continuously updates in the terminal
 
 
+        // Update timer text
+        int minutes = static_cast<int>(remainingTime) / 60;
+        int seconds = static_cast<int>(remainingTime) % 60;
+
+        timerText.setString("Time Left: " + std::to_string(minutes) + "m " + std::to_string(seconds) + "s");
 
         // Clear window and draw
         window.clear();
         window.draw(backgroundSprite);
+        window.draw(timerText); // Draw the timer
 
         // Draw traffic light
         // trafficLight.setFillColor((spawnClock.getElapsedTime().asSeconds() < 5.0f) ? sf::Color::Green : sf::Color::Red);
